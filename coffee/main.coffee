@@ -9,10 +9,17 @@ handleDocumentReady = () ->
   can.width = MainCanvas.width()
   can.height = MainCanvas.height()
   can.onselectstart = () -> false
+  $("#color1").spectrum()
+  return
 
 $( handleDocumentReady )
 
 handleMouseDown = (e) ->
+  color = $("#color1").spectrum("get").toHexString()
+  console.log color
+  Mainctx.beginPath()
+  Mainctx.strokeStyle = color
+  Mainctx.lineWidth = $('#range2').val()
   Mainctx.moveTo(e.offsetX, e.offsetY)
   mouseStatus = 1
   return
