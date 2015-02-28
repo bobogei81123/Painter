@@ -1,0 +1,93 @@
+@import "compass/reset"
+
+
+#first-wrapper 
+  width: 100%
+  display: flex
+  flex-flow: row
+
+
+#toolbox-wrapper 
+  display: flex
+  flex-flow: row
+  flex-wrap: wrap
+  align-content: flex-start
+  height: 100%
+  width: 200px
+  background-color: rgb(200, 255, 255)
+  padding: 12px
+  box-sizing: border-box
+
+  .tool-icon
+    &.active
+      background-color: rgb(220, 140, 20)
+
+
+#right-wrapper 
+  display: flex
+  width: calc(100% - 200px)
+  flex-flow: column
+
+
+#top-wrapper 
+  display: flex
+  flex-flow: row
+  align-items: center
+  background-color: rgb(220, 220, 220)
+  height: 100px
+  box-sizing: border-box
+
+
+#main-wrapper 
+  background-color: rgb(180, 180, 180)
+  height: calc(100% - 100px)
+
+
+#canvas-wrapper 
+  margin-top: 20px
+  margin-left: 20px
+  width: 800px
+  height: 600px
+  background-color: white
+  box-shadow: 4px 4px 2px 2px black
+
+
+#main-canvas 
+  width: 100%
+  height: 100%
+
+
+.tool-icon 
+  margin: 12px
+  padding: 6px
+  width: 35px
+  height: 35px
+  display: flex
+  background-color: rgb(160, 180, 240)
+
+
+.tool-icon:hover 
+  background-color: rgb(220, 140, 20)
+  cursor: pointer
+
+
+.option-text-span 
+  margin-right: 10px
+
+
+.option-wrapper 
+  margin-left: 20px
+  display: flex
+  align-items: center
+
+
+input[type="range"] 
+  -webkit-appearance: none
+  background-color: black
+  height: 2px
+
+
+#range2i 
+  width: 25px
+
+
