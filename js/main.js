@@ -214,8 +214,9 @@ paintTool = new Tools({
     })
   ],
   onMouseDown: function(x, y, ctx) {
-    var color, cur, d, dir, getData, height, inRange, isEqual3, nex, np, nx, ny, putData, queue, qx, qy, rawData, visited, width, _i, _len, _ref, _ref1;
+    var color, colorVec, cur, dx, dy, getData, height, i, inRange, isEqual4, nx, ny, o, putData, qe, qs, quex, quey, qx, qy, rawData, width, _i, _ref;
     color = this.controlVals[0].val().toRgb();
+    colorVec = [color.r, color.g, color.b, color.a * 255];
     rawData = ctx.getImageData(0, 0, ctx.width, ctx.height);
     width = ctx.width;
     height = ctx.height;
@@ -232,34 +233,41 @@ paintTool = new Tools({
       rawData.data[o + 2] = color.b;
       return rawData.data[o + 3] = color.a * 255;
     };
-    isEqual3 = function(l1, l2) {
-      return (l1[0] === l2[0]) && (l1[1] === l2[1]) && (l1[2] === l2[2]);
+    isEqual4 = function(l1, l2) {
+      return (l1[0] === l2[0]) && (l1[1] === l2[1]) && (l1[2] === l2[2]) && (l1[3] === l2[3]);
     };
+    if (isEqual4(colorVec, getData(x, y))) {
+      return;
+    }
     inRange = function(_x, _y) {
       return _x >= 0 && _x < width && _y >= 0 && _y < height;
     };
     cur = getData(x, y);
-    queue = [[x, y]];
-    dir = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-    visited = {};
-    visited[y * width + x] = true;
-    while (queue.length > 0) {
-      np = queue.pop();
-      _ref = [np[0], np[1]], nx = _ref[0], ny = _ref[1];
-      putData(nx, ny);
-      for (_i = 0, _len = dir.length; _i < _len; _i++) {
-        d = dir[_i];
-        _ref1 = [nx + d[0], ny + d[1]], qx = _ref1[0], qy = _ref1[1];
-        if (!inRange(qx, qy)) {
+    quex = [x];
+    quey = [y];
+    _ref = [0, 1], qs = _ref[0], qe = _ref[1];
+    dx = [1, 0, -1, 0];
+    dy = [0, 1, 0, -1];
+    putData(x, y);
+    while (qs !== qe) {
+      nx = quex[qs];
+      ny = quey[qs];
+      ++qs;
+      for (i = _i = 0; _i <= 3; i = ++_i) {
+        qx = nx + dx[i];
+        qy = ny + dy[i];
+        if (qx < 0 || qx >= width || qy < 0 || qy >= height) {
           continue;
         }
-        if (visited[qy * width + qx]) {
-          continue;
-        }
-        visited[qy * width + qx] = true;
-        nex = getData(qx, qy);
-        if (isEqual3(nex, cur)) {
-          queue.unshift([qx, qy]);
+        o = (qy * width + qx) * 4;
+        if (rawData.data[o] === cur[0] && rawData.data[o + 1] === cur[1] && rawData.data[o + 2] === cur[2] && rawData.data[o + 3] === cur[3]) {
+          rawData.data[o] = colorVec[0];
+          rawData.data[o + 1] = colorVec[1];
+          rawData.data[o + 2] = colorVec[2];
+          rawData.data[o + 3] = colorVec[3];
+          quex.push(qx);
+          quey.push(qy);
+          ++qe;
         }
       }
     }

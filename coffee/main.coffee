@@ -181,6 +181,7 @@ paintTool = new Tools
   ]
   onMouseDown: (x, y, ctx) ->
     color = @controlVals[0].val().toRgb()
+    colorVec = [color.r, color.g, color.b, color.a*255]
     rawData = ctx.getImageData(0, 0, ctx.width, ctx.height)
 
     width = ctx.width
@@ -197,34 +198,48 @@ paintTool = new Tools
       rawData.data[o+2] = color.b
       rawData.data[o+3] = color.a*255
       
-    isEqual3 = (l1, l2) ->
-      return (l1[0] == l2[0]) && (l1[1] == l2[1]) && (l1[2] == l2[2])
+    isEqual4 = (l1, l2) ->
+      return (l1[0] == l2[0]) && (l1[1] == l2[1]) && (l1[2] == l2[2]) && (l1[3] == l2[3])
+
+    if isEqual4 colorVec, getData(x, y)
+      return
 
     inRange = (_x, _y) ->
       return _x >= 0 and _x < width and _y >= 0 and _y < height
 
     
     cur = getData x, y
-    queue = [ [x, y] ]
-    dir = [ [1, 0], [0, 1], [-1, 0], [0, -1] ]
-    visited = {}
-    visited[y*width+x] =  true
+    quex = [ x ]
+    quey = [ y ]
+    [qs, qe] = [0, 1]
+    dx = [1, 0, -1, 0]
+    dy = [0, 1, 0, -1]
+    putData(x, y)
 
-    while queue.length > 0
+    while qs != qe
 
-      np = queue.pop()
-      [nx, ny] = [np[0], np[1]]
-      putData nx, ny
+      nx = quex[qs]
+      ny = quey[qs]
+      ++ qs
       
-      for d in dir
-        [qx, qy] = [nx + d[0], ny + d[1]]
-        continue if not inRange qx, qy
-        if visited[ qy*width + qx ]
-          continue
-        visited[qy*width+qx] = true
-        nex = getData qx, qy
-        if isEqual3 nex, cur
-          queue.unshift [qx, qy]
+      for i in [0..3]
+        qx = nx + dx[i]
+        qy = ny + dy[i]
+
+        continue if qx < 0 or qx >= width or qy < 0 or qy >= height
+
+        o = (qy * width + qx) * 4
+        #nex = [rawData.data[o], rawData.data[o+1], rawData.data[o+2], rawData.data[o+3]]
+        if rawData.data[o] == cur[0] && rawData.data[o+1] == cur[1] && rawData.data[o+2] == cur[2] && rawData.data[o+3] == cur[3]
+          #o = (qy * width + qx) * 4
+          rawData.data[o] = colorVec[0]
+          rawData.data[o+1] = colorVec[1]
+          rawData.data[o+2] = colorVec[2]
+          rawData.data[o+3] = colorVec[3]
+
+          quex.push(qx)
+          quey.push(qy)
+          ++ qe
 
 
     ctx.putImageData rawData, 0, 0
