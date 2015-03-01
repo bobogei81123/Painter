@@ -10,8 +10,14 @@ Main = (function() {
     this.mouseStatus = 0;
     this.currentTool = -1;
     this.canvas = $('#main-canvas');
+    this.bcanvas = $('#buf-canvas');
+    this.detectDiv = $('#detect-div');
     this.ctx = this.canvas[0].getContext('2d');
+    this.bctx = this.bcanvas[0].getContext('2d');
     this.tools = [];
+    this.width = this.canvas.width();
+    this.height = this.canvas.height();
+    this.BufDis = 50;
   }
 
   Main.prototype.mouseDown = function() {
@@ -30,6 +36,12 @@ Main = (function() {
     can.onselectstart = function() {
       return false;
     };
+    can = this.bcanvas[0];
+    can.width = this.bctx.width = this.bcanvas.width();
+    can.height = this.bctx.height = this.bcanvas.height();
+    can.onselectstart = function() {
+      return false;
+    };
     toolDiv = $('#toolbox-wrapper');
     this.tools.forEach(function(tool, idx) {
       var img, wrapDiv;
@@ -41,9 +53,12 @@ Main = (function() {
     });
     this.ctx.fillStyle = 'white';
     this.ctx.fillRect(0, 0, this.canvas.width(), this.canvas.height());
-    this.canvas.mousedown(this.onMouseDown);
-    this.canvas.mousemove(this.onMouseMove);
-    return this.canvas.mouseup(this.onMouseUp);
+    this.bctx.clearAll = function() {
+      return this.clearRect(0, 0, this.width, this.height);
+    };
+    this.detectDiv.mousedown(this.onMouseDown);
+    this.detectDiv.mousemove(this.onMouseMove);
+    return this.detectDiv.mouseup(this.onMouseUp);
   };
 
   Main.prototype.changeCurrentTool = function(idx) {
@@ -63,23 +78,29 @@ Main = (function() {
   };
 
   Main.prototype.onMouseDown = function(e) {
+    console.log("zz");
     this.mouseDown();
     console.log(this.currentTool);
     if (this.currentTool !== -1) {
-      this.tools[this.currentTool].onMouseDown(e.offsetX, e.offsetY, this.ctx);
+      this.tools[this.currentTool].onMouseDown(e.offsetX - this.BufDis, e.offsetY - this.BufDis, this.ctx, this.bctx);
     }
   };
 
   Main.prototype.onMouseUp = function(e) {
     this.mouseUp();
     if (this.currentTool !== -1) {
-      this.tools[this.currentTool].onMouseUp(e.offsetX, e.offsetY, this.ctx);
+      this.tools[this.currentTool].onMouseUp(e.offsetX - this.BufDis, e.offsetY - this.BufDis, this.ctx, this.bctx);
     }
   };
 
   Main.prototype.onMouseMove = function(e) {
+    var x, y, _ref;
+    _ref = [e.offsetX - this.BufDis, e.offsetY - this.BufDis], x = _ref[0], y = _ref[1];
     if (this.currentTool !== -1) {
-      this.tools[this.currentTool].onMouseMove(e.offsetX, e.offsetY, this.ctx, this.mouseStatus);
+      this.tools[this.currentTool].onMouseMove(x, y, this.ctx, this.bctx, this.mouseStatus);
+    }
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+      this.mouseUp();
     }
   };
 
@@ -173,7 +194,7 @@ pencilTool = new Tools({
     ctx.lineWidth = this.controlVals[1].val();
     return ctx.moveTo(x, y);
   },
-  onMouseMove: function(x, y, ctx, status) {
+  onMouseMove: function(x, y, ctx, bctx, status) {
     console.log(status);
     if (status === 0) {
       return;
@@ -244,7 +265,7 @@ paintTool = new Tools({
     }
     return ctx.putImageData(rawData, 0, 0);
   },
-  onMouseMove: function(x, y, ctx, status) {},
+  onMouseMove: function(x, y, ctx, bctx, status) {},
   onMouseUp: function(x, y, ctx) {},
   iconImg: 'paint-icon.png'
 });
@@ -263,18 +284,30 @@ rectTool = new Tools({
     this.startx = x;
     return this.starty = y;
   },
-  onMouseMove: function(x, y, ctx) {
+  onMouseMove: function(x, y, ctx, bctx, st) {
+    if (st === 0) {
+      return;
+    }
     this.endx = x;
-    return this.endy = y;
+    this.endy = y;
+    bctx.clearRect(0, 0, bctx.width, bctx.height);
+    bctx.beginPath();
+    bctx.strokeStyle = this.getVal(0).toRgbString();
+    bctx.fillStyle = this.getVal(1).toRgbString();
+    bctx.lineWidth = this.getVal(2);
+    bctx.rect(this.startx, this.starty, this.endx - this.startx, this.endy - this.starty);
+    bctx.fill();
+    return bctx.stroke();
   },
-  onMouseUp: function(x, y, ctx) {
+  onMouseUp: function(x, y, ctx, bctx) {
     ctx.beginPath();
     ctx.strokeStyle = this.controlVals[0].val().toRgbString();
     ctx.fillStyle = this.getVal(1).toRgbString();
     ctx.lineWidth = this.getVal(2);
     ctx.rect(this.startx, this.starty, this.endx - this.startx, this.endy - this.starty);
+    ctx.fill();
     ctx.stroke();
-    return ctx.fill();
+    return bctx.clearRect(0, 0, bctx.width, bctx.height);
   },
   iconImg: 'rect-icon.png'
 });
@@ -289,33 +322,58 @@ circleTool = new Tools({
       text: 'Border width:'
     })
   ],
+  drawEllipse: function(x1, y1, x2, y2, ctx) {
+    var centx, centy, lenx, leny, _ref, _ref1;
+    if (x1 > x2) {
+      _ref = [x2, x1], x1 = _ref[0], x2 = _ref[1];
+    }
+    if (y1 > y2) {
+      _ref1 = [y2, y1], y1 = _ref1[0], y2 = _ref1[1];
+    }
+    centx = (x1 + x2) / 2;
+    centy = (y1 + y2) / 2;
+    lenx = (x2 - x1) / 2;
+    leny = (y2 - y1) / 2;
+    return [centx, centy, lenx, leny];
+  },
   onMouseDown: function(x, y, ctx) {
     this.startx = x;
     return this.starty = y;
   },
-  onMouseMove: function(x, y, ctx) {
+  onMouseMove: function(x, y, ctx, bctx, st) {
+    var res;
+    if (st === 0) {
+      return;
+    }
     this.endx = x;
-    return this.endy = y;
+    this.endy = y;
+    bctx.clearAll();
+    bctx.clearRect(0, 0, bctx.width, bctx.height);
+    bctx.beginPath();
+    bctx.strokeStyle = this.controlVals[0].val().toRgbString();
+    bctx.fillStyle = this.getVal(1).toRgbString();
+    bctx.lineWidth = parseInt(this.getVal(2));
+    res = this.drawEllipse(this.startx, this.starty, this.endx, this.endy, bctx);
+    bctx.ellipse(res[0], res[1], res[2], res[3], 0, 0, 2 * Math.PI);
+    bctx.fill();
+    return bctx.stroke();
   },
-  onMouseUp: function(x, y, ctx) {
-    var centx, centy, lenx, leny, _ref, _ref1;
+  onMouseUp: function(x, y, ctx, bctx) {
+    var res;
+    bctx.clearAll();
     ctx.beginPath();
     ctx.strokeStyle = this.controlVals[0].val().toRgbString();
-    ctx.fillStyle = this.getVal(1);
-    ctx.lineWidth = this.getVal(2);
-    if (this.startx > this.endx) {
-      _ref = [this.endx, this.startx], this.startx = _ref[0], this.endx = _ref[1];
-    }
-    if (this.starty > this.endy) {
-      _ref1 = [this.endy, this.starty], this.starty = _ref1[0], this.endy = _ref1[1];
-    }
-    centx = (this.startx + this.endx) / 2;
-    centy = (this.starty + this.endy) / 2;
-    lenx = (this.endx - this.startx) / 2;
-    leny = (this.endy - this.starty) / 2;
-    ctx.ellipse(centx, centy, lenx, leny, 0, 0, 2 * Math.PI);
+    ctx.fillStyle = this.getVal(1).toRgbString();
+    ctx.lineWidth = parseInt(this.getVal(2));
+    console.log(ctx.lineWidth, this.getVal(2));
+    res = this.drawEllipse(this.startx, this.starty, this.endx, this.endy, ctx);
+    ctx.ellipse(res[0], res[1], res[2], res[3], 0, 0, 2 * Math.PI);
+    ctx.fill();
     ctx.stroke();
-    return ctx.fill();
+    console.log("fill");
+    ctx.beginPath();
+    this.drawEllipse(this.startx + 200, this.starty + 200, this.endx, this.endy, ctx);
+    return ctx.stroke();
   },
   iconImg: 'circle-icon.png'
 });

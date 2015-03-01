@@ -5,8 +5,14 @@ class Main
     @mouseStatus = 0
     @currentTool = -1
     @canvas = $('#main-canvas')
+    @bcanvas = $('#buf-canvas')
+    @detectDiv = $('#detect-div')
     @ctx = @canvas[0].getContext('2d')
+    @bctx = @bcanvas[0].getContext('2d')
     @tools = []
+    @width = @canvas.width()
+    @height = @canvas.height()
+    @BufDis = 50
 
   mouseDown: () ->
     @mouseStatus = 1
@@ -19,6 +25,12 @@ class Main
     can.width = @ctx.width = @canvas.width()
     can.height = @ctx.height = @canvas.height()
     can.onselectstart = () -> false
+
+    can = @bcanvas[0]
+    can.width = @bctx.width = @bcanvas.width()
+    can.height = @bctx.height = @bcanvas.height()
+    can.onselectstart = () -> false
+
     toolDiv = $('#toolbox-wrapper')
     @tools.forEach (tool, idx) ->
       img = $('<img>').attr('src', 'img/' + tool.iconImg).addClass('tool-img')
@@ -32,9 +44,13 @@ class Main
 
     @ctx.fillStyle = 'white'
     @ctx.fillRect 0, 0, @canvas.width(), @canvas.height()
-    @canvas.mousedown @onMouseDown
-    @canvas.mousemove @onMouseMove
-    @canvas.mouseup @onMouseUp
+
+    @bctx.clearAll = () ->
+      @clearRect 0, 0, @width, @height
+
+    @detectDiv.mousedown @onMouseDown
+    @detectDiv.mousemove @onMouseMove
+    @detectDiv.mouseup @onMouseUp
 
   changeCurrentTool: (idx) ->
     return if idx == @currentTool
@@ -48,23 +64,30 @@ class Main
     @currentTool = idx
 
   onMouseDown: (e) =>
+    console.log "zz"
     @mouseDown()
     console.log @currentTool
     if @currentTool != -1
-      @tools[@currentTool].onMouseDown(e.offsetX, e.offsetY, @ctx)
+      @tools[@currentTool].onMouseDown(e.offsetX - @BufDis, e.offsetY - @BufDis, @ctx, @bctx)
       return
 
   onMouseUp: (e) =>
     @mouseUp()
     if @currentTool != -1
-      @tools[@currentTool].onMouseUp(e.offsetX, e.offsetY, @ctx)
+      @tools[@currentTool].onMouseUp(e.offsetX - @BufDis, e.offsetY - @BufDis, @ctx, @bctx)
       return
     
       
   onMouseMove: (e) =>
+    [x, y] = [e.offsetX - @BufDis, e.offsetY - @BufDis]
+
     if @currentTool != -1
-      @tools[@currentTool].onMouseMove(e.offsetX, e.offsetY, @ctx, @mouseStatus)
-      return
+      @tools[@currentTool].onMouseMove(x, y, @ctx, @bctx, @mouseStatus)
+
+    if x < 0 or x >= @width or y < 0 or y >= @height
+      @mouseUp()
+
+    return
     
 
 class Tools
@@ -140,7 +163,7 @@ pencilTool = new Tools
     ctx.lineWidth = @controlVals[1].val()
     ctx.moveTo x, y
 
-  onMouseMove: (x, y, ctx, status) ->
+  onMouseMove: (x, y, ctx, bctx, status) ->
     console.log status
     return if status == 0
     console.log x, y
@@ -207,7 +230,7 @@ paintTool = new Tools
     ctx.putImageData rawData, 0, 0
 
 
-  onMouseMove: (x, y, ctx, status) ->
+  onMouseMove: (x, y, ctx, bctx, status) ->
     return
 
   onMouseUp: (x, y, ctx) ->
@@ -224,17 +247,28 @@ rectTool = new Tools
   onMouseDown: (x, y, ctx) ->
     @startx = x
     @starty = y
-  onMouseMove: (x, y, ctx) ->
+  onMouseMove: (x, y, ctx, bctx, st) ->
+    return if st == 0
     @endx = x
     @endy = y
-  onMouseUp: (x, y, ctx) ->
+    bctx.clearRect 0, 0, bctx.width, bctx.height
+    bctx.beginPath()
+    bctx.strokeStyle = @getVal(0).toRgbString()
+    bctx.fillStyle = @getVal(1).toRgbString()
+    bctx.lineWidth = @getVal(2)
+    bctx.rect(@startx, @starty, @endx - @startx, @endy - @starty)
+    bctx.fill()
+    bctx.stroke()
+    
+  onMouseUp: (x, y, ctx, bctx) ->
     ctx.beginPath()
     ctx.strokeStyle = @controlVals[0].val().toRgbString()
     ctx.fillStyle = @getVal(1).toRgbString()
     ctx.lineWidth = @getVal(2)
     ctx.rect(@startx, @starty, @endx - @startx, @endy - @starty)
-    ctx.stroke()
     ctx.fill()
+    ctx.stroke()
+    bctx.clearRect 0, 0, bctx.width, bctx.height
 
   iconImg: 'rect-icon.png'
 
@@ -244,27 +278,52 @@ circleTool = new Tools
     new ColorInput( text: 'Fill color:' )
     new RangeInput( text: 'Border width:' )
   ]
+  drawEllipse: (x1, y1, x2, y2, ctx) ->
+    [x1, x2] = [x2, x1] if x1 > x2
+    [y1, y2] = [y2, y1] if y1 > y2
+    centx = (x1 + x2) / 2
+    centy = (y1 + y2) / 2
+    lenx = (x2 - x1) / 2
+    leny = (y2 - y1) / 2
+    return [centx, centy, lenx, leny]
+
   onMouseDown: (x, y, ctx) ->
     @startx = x
     @starty = y
-  onMouseMove: (x, y, ctx) ->
+
+  onMouseMove: (x, y, ctx, bctx, st) ->
+    return if st == 0
     @endx = x
     @endy = y
-  onMouseUp: (x, y, ctx) ->
+    bctx.clearAll()
+    bctx.clearRect 0, 0, bctx.width, bctx.height
+    bctx.beginPath()
+    bctx.strokeStyle = @controlVals[0].val().toRgbString()
+    bctx.fillStyle = @getVal(1).toRgbString()
+    bctx.lineWidth = parseInt(@getVal(2))
+    res = @drawEllipse(@startx, @starty, @endx, @endy, bctx)
+    bctx.ellipse(res[0], res[1], res[2], res[3] ,0, 0, 2*Math.PI)
+    bctx.fill()
+    bctx.stroke()
+
+  onMouseUp: (x, y, ctx, bctx) ->
+    bctx.clearAll()
     ctx.beginPath()
     ctx.strokeStyle = @controlVals[0].val().toRgbString()
-    ctx.fillStyle = @getVal(1)
-    ctx.lineWidth = @getVal(2)
-    [@startx, @endx] = [@endx, @startx] if @startx > @endx
-    [@starty, @endy] = [@endy, @starty] if @starty > @endy
-    centx = (@startx + @endx) / 2
-    centy = (@starty + @endy) / 2
-    lenx = (@endx - @startx) / 2
-    leny = (@endy - @starty) / 2
+    ctx.fillStyle = @getVal(1).toRgbString()
+    ctx.lineWidth = parseInt(@getVal(2))
+    console.log ctx.lineWidth, @getVal(2)
+
+    res = @drawEllipse(@startx, @starty, @endx, @endy, ctx)
+    ctx.ellipse(res[0], res[1], res[2], res[3] ,0, 0, 2*Math.PI)
     
-    ctx.ellipse(centx, centy, lenx, leny ,0, 0, 2*Math.PI)
-    ctx.stroke()
     ctx.fill()
+    ctx.stroke()
+    console.log "fill"
+    ctx.beginPath()
+
+    @drawEllipse(@startx+200, @starty+200, @endx, @endy, ctx)
+    ctx.stroke()
 
   iconImg: 'circle-icon.png'
 
