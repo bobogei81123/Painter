@@ -64,9 +64,7 @@ class Main
     @currentTool = idx
 
   onMouseDown: (e) =>
-    console.log "zz"
     @mouseDown()
-    console.log @currentTool
     if @currentTool != -1
       @tools[@currentTool].onMouseDown(e.offsetX - @BufDis, e.offsetY - @BufDis, @ctx, @bctx)
       return
@@ -100,6 +98,7 @@ class Tools
 
 class ColorInput
   constructor: (o) ->
+    @defaultColor = '#000000'
     _.extend @, o
     return
 
@@ -121,15 +120,16 @@ class ColorInput
         ["#e06666","#f6b26b","#ffd966","#93c47d","#76a5af","#6fa8dc","#8e7cc3","#c27ba0"],
         ["#c00","#e69138","#f1c232","#6aa84f","#45818e","#3d85c6","#674ea7","#a64d79"],
         ["#900","#b45f06","#bf9000","#38761d","#134f5c","#0b5394","#351c75","#741b47"],
-        ["#600","#783f04","#7f6000","#274e13","#0c343d","#073763","#20124d","#4c1130"]
+        ["#600","#783f04","#7f6000","#274e13","#0c343d","#073763","#20124d","#4c1130"],
+        ["#00000000"]
       ]
       showAlpha: true
+      color: @defaultColor
     @spec = colorInput
     return
     
 
   val: () ->
-    console.log @spec.spectrum('get').toRgbString()
     @spec.spectrum('get')
 
 class RangeInput
@@ -164,9 +164,7 @@ pencilTool = new Tools
     ctx.moveTo x, y
 
   onMouseMove: (x, y, ctx, bctx, status) ->
-    console.log status
     return if status == 0
-    console.log x, y
     ctx.lineTo x, y
     ctx.stroke()
 
@@ -256,7 +254,9 @@ paintTool = new Tools
 rectTool = new Tools
   controlVals: [
     new ColorInput( text: 'Border color:' )
-    new ColorInput( text: 'Fill color:' )
+    new ColorInput
+      text: 'Fill color:'
+      defaultColor: '#00000000'
     new RangeInput( text: 'Border width:' )
   ]
   onMouseDown: (x, y, ctx) ->
@@ -290,7 +290,9 @@ rectTool = new Tools
 circleTool = new Tools
   controlVals: [
     new ColorInput( text: 'Border color:' )
-    new ColorInput( text: 'Fill color:' )
+    new ColorInput
+      text: 'Fill color:'
+      defaultColor: '#00000000'
     new RangeInput( text: 'Border width:' )
   ]
   drawEllipse: (x1, y1, x2, y2, ctx) ->
@@ -327,20 +329,81 @@ circleTool = new Tools
     ctx.strokeStyle = @controlVals[0].val().toRgbString()
     ctx.fillStyle = @getVal(1).toRgbString()
     ctx.lineWidth = parseInt(@getVal(2))
-    console.log ctx.lineWidth, @getVal(2)
 
     res = @drawEllipse(@startx, @starty, @endx, @endy, ctx)
     ctx.ellipse(res[0], res[1], res[2], res[3] ,0, 0, 2*Math.PI)
     
     ctx.fill()
     ctx.stroke()
-    console.log "fill"
     ctx.beginPath()
 
-    @drawEllipse(@startx+200, @starty+200, @endx, @endy, ctx)
     ctx.stroke()
 
   iconImg: 'circle-icon.png'
+
+lineTool = new Tools
+  controlVals: [
+    new ColorInput( text: 'Border color:' )
+    new RangeInput( text: 'Border width:' )
+  ]
+
+  onMouseDown: (x, y, ctx) ->
+    @startx = x
+    @starty = y
+    ctx.beginPath()
+    ctx.strokeStyle = @controlVals[0].val().toRgbString()
+    ctx.lineWidth = parseInt(@getVal(1))
+    ctx.moveTo x, y
+
+  onMouseMove: (x, y, ctx, bctx, st) ->
+    return if st == 0
+    @endx = x
+    @endy = y
+    bctx.clearAll()
+    bctx.beginPath()
+    bctx.strokeStyle = @controlVals[0].val().toRgbString()
+    bctx.lineWidth = parseInt(@getVal(1))
+
+    bctx.moveTo @startx, @starty
+    bctx.lineTo @endx, @endy
+    bctx.stroke()
+
+  onMouseUp: (x, y, ctx, bctx) ->
+    bctx.clearAll()
+
+    ctx.lineTo x, y
+    ctx.stroke()
+
+  iconImg: 'line-icon.png'
+
+rectSelectTool = new Tools
+  controlVals: [
+  ]
+
+  onMouseDown: (x, y, ctx) ->
+    @startSelectx = x
+    @startSelecty = y
+
+  onMouseMove: (x, y, ctx, bctx, st) ->
+    if st == 1
+      @endx = x
+      @endy = y
+      bctx.clearAll()
+      bctx.beginPath()
+      bctx.strokeStyle = "black"
+      bctx.lineWidth = 2
+
+      bctx.rect @startSelectx, @startSelecty, x - @startSelectx, y - @startSelecty
+      bctx.stroke()
+
+  onMouseUp: (x, y, ctx, bctx) ->
+    bctx.clearAll()
+
+    ctx.lineTo x, y
+    ctx.stroke()
+
+  iconImg: 'line-icon.png'
+
 
 main = new Main()
 main.tools = [
@@ -348,6 +411,8 @@ main.tools = [
   paintTool,
   rectTool,
   circleTool,
+  lineTool,
+  rectSelectTool,
 ]
 main.init()
 
