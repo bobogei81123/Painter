@@ -24,12 +24,12 @@ class Main
     can = @canvas[0]
     can.width = @ctx.width = @canvas.width()
     can.height = @ctx.height = @canvas.height()
-    can.onselectstart = () -> false
+    #can.onselectstart = () -> false
 
     can = @bcanvas[0]
     can.width = @bctx.width = @bcanvas.width()
     can.height = @bctx.height = @bcanvas.height()
-    can.onselectstart = () -> false
+    #can.onselectstart = () -> false
 
     toolDiv = $('#toolbox-wrapper')
     @tools.forEach (tool, idx) ->
@@ -42,18 +42,45 @@ class Main
 
       toolDiv.append(wrapDiv)
 
-    @ctx.fillStyle = 'white'
+    @ctx.fillStyle = 'rgba(255, 255, 255, 0)'
     @ctx.fillRect 0, 0, @canvas.width(), @canvas.height()
 
-    @bctx.clearAll = () ->
+    CanvasRenderingContext2D.prototype.clearAll = () ->
       @clearRect 0, 0, @width, @height
+
+    CanvasRenderingContext2D.prototype.setPixel = (x, y, color) ->
+      idt = @.createImageData 1, 1
+      if color instanceof String
+        idt.data[0] = color[0]
+        idt.data[1] = color[1]
+        idt.data[2] = color[2]
+        idt.data[3] = color[3]
+      else
+        idt.data[0] = color.r
+        idt.data[1] = color.g
+        idt.data[2] = color.b
+        idt.data[3] = color.a * 255
+      console.log idt.data, color
+      @putImageData idt, x, y
+      return
+
 
     @detectDiv.mousedown @onMouseDown
     @detectDiv.mousemove @onMouseMove
     @detectDiv.mouseup @onMouseUp
 
   changeCurrentTool: (idx) ->
+
+    if @currentTool >= 0 and @tools[@currentTool].onEnd?
+      @tools[@currentTool].onEnd @ctx, @bctx
+
     return if idx == @currentTool
+
+    @ctx.restore()
+    @bctx.restore()
+    @ctx.save()
+    @bctx.save()
+
     toolDiv = $('#toolbox-wrapper')
     toolDiv.children().removeClass 'active'
     toolDiv.children().eq(idx).addClass 'active'
@@ -62,6 +89,9 @@ class Main
     @tools[idx].controlVals.forEach (ctr) ->
       ctr.render(topDiv)
     @currentTool = idx
+    if @tools[idx].onLoad?
+      @tools[idx].onLoad()
+      console.log "zzz"
 
   onMouseDown: (e) =>
     @mouseDown()
@@ -86,7 +116,6 @@ class Main
       @mouseUp()
 
     return
-    
 
 class Tools
   constructor: (o) ->
@@ -380,29 +409,119 @@ rectSelectTool = new Tools
   controlVals: [
   ]
 
+  onLoad: () ->
+    @selected = false
+    @drag = false
+
   onMouseDown: (x, y, ctx) ->
-    @startSelectx = x
-    @startSelecty = y
+    if not @selected
+      @startSelectx = x
+      @startSelecty = y
+    else
+      console.log "yyy"
+      @offx = x - @curx
+      @offy = y - @cury
+      console.log @offx, @offy, @curx, @cury
+
+      if @offx >= 0 and @offy >= 0 and @offx < @selectWidth and @offy < @selectHeight
+        @drag = true
+        console.log "Drag = True"
+
+  setCtx: (ctx) ->
+    ctx.strokeStyle = "black"
+    ctx.lineWidth = 2
+    ctx.setLineDash([5])
+
 
   onMouseMove: (x, y, ctx, bctx, st) ->
-    if st == 1
+    return if st == 0
+
+    if not @selected
       @endx = x
       @endy = y
       bctx.clearAll()
       bctx.beginPath()
-      bctx.strokeStyle = "black"
-      bctx.lineWidth = 2
+      @setCtx bctx 
 
       bctx.rect @startSelectx, @startSelecty, x - @startSelectx, y - @startSelecty
       bctx.stroke()
-
+    else if @drag
+      bctx.clearAll()
+      [realx, realy] = [x - @offx, y - @offy]
+      bctx.putImageData @tempImg, realx, realy
+      bctx.beginPath()
+      bctx.rect realx, realy, @selectWidth, @selectHeight
+      bctx.stroke()
+      [@curx, @cury] = [realx, realy]
+      
   onMouseUp: (x, y, ctx, bctx) ->
+    
+    if not @selected
+      @endSelectx = x
+      @endSelecty = y
+      @selectWidth = x - @startSelectx
+      @selectHeight = y - @startSelecty
+
+      @tempImg = ctx.getImageData @startSelectx
+      , @startSelecty
+      , @selectWidth
+      , @selectHeight
+      @selected = true
+      [@curx, @cury] = [@startSelectx, @startSelecty]
+      console.log @curx, @cury
+    else if @drag
+      @drag = false
+
+  onEnd: (ctx, bctx) ->
     bctx.clearAll()
+    ctx.putImageData @tempImg, @curx, @cury
+    @selected = false
 
-    ctx.lineTo x, y
-    ctx.stroke()
+  iconImg: 'rect-select-icon.svg'
 
-  iconImg: 'line-icon.png'
+Math.random2DNormal = (c = 1) ->
+  r = Math.sqrt(-2.0 * Math.log( Math.random() ) )
+  theta = Math.random() * 2.0 * Math.PI
+  return [c * r * Math.cos(theta), c * r * Math.sin(theta)]
+
+sprayTool = new Tools
+  controlVals: [
+    new ColorInput( text: "Spray Color: " )
+    new RangeInput( text: "Range: " )
+  ]
+  onMouseDown: (x, y, ctx) ->
+    color = @controlVals[0].val()
+    @curx = x
+    @cury = y
+    @r = parseInt @getVal 1
+    my = @
+
+    @timerId =  setInterval () ->
+      for i in [0..30]
+        arr = Math.random2DNormal my.r / 2.0
+        dx = Math.round arr[0]
+        dy = Math.round arr[1]
+        ctx.setPixel my.curx + dx, my.cury + dy, color.toRgb()
+      return
+    ,
+      100
+      
+
+  onMouseMove: (x, y, ctx, bctx, status) ->
+    @r = parseInt @getVal 1
+    bctx.clearAll()
+    bctx.beginPath()
+    bctx.arc x, y, @r, 0, 2*Math.PI, false
+    bctx.stroke()
+    if status == 1
+      @curx = x
+      @cury = y
+
+  onMouseUp: (x, y, ctx, status) ->
+    clearInterval @timerId
+    return
+
+  iconImg: 'spray-icon.png'
 
 
 main = new Main()
@@ -413,49 +532,8 @@ main.tools = [
   circleTool,
   lineTool,
   rectSelectTool,
+  sprayTool,
 ]
 main.init()
 
 
-
-
-#handleMouseDown = (e) ->
-  #color = $("#color1").spectrum("get").toRgbString()
-  #console.log color
-  #Mainctx.beginPath()
-  #Mainctx.strokeStyle = color
-  #Mainctx.lineWidth = $('#range2').val()
-  #Mainctx.moveTo(e.offsetX, e.offsetY)
-  #window.mouseStatus = 1
-  #return
-
-#handleMouseMove = (e) ->
-  #console.log e.offsetX, e.offsetY
-  #console.log mouseStatus
-  #if mouseStatus == 1
-    #Mainctx.lineTo e.offsetX, e.offsetY
-    #console.log e.offsetX, e.offsetY
-    #Mainctx.stroke()
-  #return
-
-#handleMouseUp = (e) ->
-  #window.mouseStatus = 0
-  #return
-
-
-#handleDocumentReady = () ->
-  #window.MainCanvas = $('#main-canvas')
-  #window.Mainctx = MainCanvas[0].getContext "2d"
-  #window.mouseStatus = 0
-  #can = MainCanvas[0]
-  #can.width = MainCanvas.width()
-  #can.height = MainCanvas.height()
-  #can.onselectstart = () -> false
-  #$("#color1").spectrum()
-  #MainCanvas.mousedown( handleMouseDown )
-  #MainCanvas.mousemove( handleMouseMove )
-  #MainCanvas.mouseup( handleMouseUp )
-  #MainCanvas.mouseleave( handleMouseUp )
-  #return
-
-#$( handleDocumentReady )
