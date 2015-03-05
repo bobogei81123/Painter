@@ -1,4 +1,11 @@
 
+Math.random2DNormal = (c = 1) ->
+  r = Math.sqrt(-2.0 * Math.log( Math.random() ) )
+  theta = Math.random() * 2.0 * Math.PI
+  return [c * r * Math.cos(theta), c * r * Math.sin(theta)]
+
+Math.euclidDistance = (x1, y1, x2, y2) ->
+  Math.sqrt( (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) )
 
 class Main
   constructor: () ->
@@ -48,6 +55,17 @@ class Main
     CanvasRenderingContext2D.prototype.clearAll = () ->
       @clearRect 0, 0, @width, @height
 
+    CanvasRenderingContext2D.prototype.circle = (x, y, r) ->
+      @arc x, y, r, 0, 2.0*Math.PI
+
+    CanvasRenderingContext2D.prototype.drawMountCircle = (x, y) ->
+      @beginPath()
+      @strokeStyle = '#00FFFF'
+      @lineWidth = 4
+      @arc x, y, 4, 0, 2.0*Math.PI
+      @stroke()
+      
+
     CanvasRenderingContext2D.prototype.setPixel = (x, y, color) ->
       idt = @.createImageData 1, 1
       if color instanceof String
@@ -91,9 +109,9 @@ class Main
     @currentTool = idx
     if @tools[idx].onLoad?
       @tools[idx].onLoad()
-      console.log "zzz"
 
   onMouseDown: (e) =>
+    console.log "mouse down"
     @mouseDown()
     if @currentTool != -1
       @tools[@currentTool].onMouseDown(e.offsetX - @BufDis, e.offsetY - @BufDis, @ctx, @bctx)
@@ -117,13 +135,62 @@ class Main
 
     return
 
+class MountPoint
+  constructor: (o) ->
+    _.extend @, o
+
+  dis: (x, y) ->
+    console.log x, y, @x, @y
+    return Math.euclidDistance(x, y, @x, @y)
+
+  setxy: (x, y, ctx) ->
+    @x = x
+    @y = y
+    if ctx?
+      @draw(ctx)
+    return
+  
+  draw: (ctx) ->
+    ctx.drawMountCircle @x, @y
+
+
 class Tools
   constructor: (o) ->
     _.extend @, o
+    @mountPoints = []
     return
 
   getVal: (i) ->
     return @controlVals[i].val()
+
+  getMount: (i) ->
+    return @mountPoints[i]
+
+  mount: (i) ->
+    return @mountPoints[i]
+
+  getPos: () ->
+    rt = []
+    @mountPoints.forEach (m) ->
+      rt.push x: m.x, y: m.y
+    return rt
+
+  pos: (i) ->
+    return x: mountPoints[i].x, y: mountPoints[i].y
+  
+  getClosetMount: (x, y) ->
+    bdis = 10
+    for m in @mountPoints
+      d = m.dis x, y
+      console.log d
+      if d < bdis
+        bdis = d
+        cm = m
+    return cm
+  
+  drawMounts: (ctx) ->
+    @mountPoints.forEach (m) ->
+      m.draw ctx
 
 class ColorInput
   constructor: (o) ->
@@ -169,15 +236,25 @@ class RangeInput
   render: (par) ->
     textSpan = $('<span> ' + @text + ' </span>').addClass('option-text-span')
     rangeInput = $('<input type="range" id="range2" min="0" max="100" value="3"/>')
+    numInput = $('<input type="number" min="0" max="100" value="3"/>')
     wrapDiv = $('<div>').addClass('option-wrapper')
-    wrapDiv.append(textSpan).append(rangeInput)
+    wrapDiv.append(textSpan).append(rangeInput).append numInput
     par.append(wrapDiv)
     @inp = rangeInput
+    @value = 3
+    my = @
+    rangeInput.on 'input', () ->
+      my.value = parseInt rangeInput.val()
+      numInput.val my.value
+
+    numInput.on 'input', () ->
+      my.value = parseInt numInput.val()
+      rangeInput.val my.value
     return
     
 
   val: () ->
-    @inp.val()
+    @value
 
 pencilTool = new Tools
   controlVals: [
@@ -193,6 +270,10 @@ pencilTool = new Tools
     ctx.moveTo x, y
 
   onMouseMove: (x, y, ctx, bctx, status) ->
+    bctx.clearAll()
+    bctx.beginPath()
+    bctx.arc x, y, @getVal(1) / 2.0, 0, 2.0 * Math.PI
+    bctx.stroke()
     return if status == 0
     ctx.lineTo x, y
     ctx.stroke()
@@ -376,32 +457,68 @@ lineTool = new Tools
     new RangeInput( text: 'Border width:' )
   ]
 
-  onMouseDown: (x, y, ctx) ->
-    @startx = x
-    @starty = y
+  onLoad: () ->
+    @hasLine = false
+    @mountPoints = [new MountPoint()
+                    ,new MountPoint()]
+
+  onMouseDown: (x, y, ctx, bctx) ->
+    if not @hasLine
+      @getMount(0).setxy x, y
+      @getMount(1).setxy x, y
+    else
+      m = @getClosetMount(x, y)
+      if m?
+        @dragMount = m
+      else
+        @onEnd(ctx, bctx)
+        @hasLine = false
+        @onMouseDown x, y, ctx, bctx
+
+  draw: (ctx) ->
     ctx.beginPath()
-    ctx.strokeStyle = @controlVals[0].val().toRgbString()
+    ctx.strokeStyle = @getVal(0).toRgbString()
     ctx.lineWidth = parseInt(@getVal(1))
-    ctx.moveTo x, y
+    pos = @getPos()
+    console.log pos
+    ctx.moveTo pos[0].x, pos[0].y
+    ctx.lineTo pos[1].x, pos[1].y
+    ctx.stroke()
+
 
   onMouseMove: (x, y, ctx, bctx, st) ->
     return if st == 0
-    @endx = x
-    @endy = y
-    bctx.clearAll()
-    bctx.beginPath()
-    bctx.strokeStyle = @controlVals[0].val().toRgbString()
-    bctx.lineWidth = parseInt(@getVal(1))
+    if not @hasLine
+      @mount(1).setxy x, y
+      bctx.clearAll()
+      @draw bctx
+    else
+      bctx.clearAll()
+      @dragMount.setxy x, y, bctx
+      @draw bctx
 
-    bctx.moveTo @startx, @starty
-    bctx.lineTo @endx, @endy
-    bctx.stroke()
 
   onMouseUp: (x, y, ctx, bctx) ->
-    bctx.clearAll()
+    if not @hasLine
+      @hasLine = true
+      @mount(1).setxy x, y
+      bctx.clearAll()
+      @draw bctx
+      
+      console.log @mountPoints
+      @mountPoints.forEach (m) ->
+        m.draw(bctx)
 
-    ctx.lineTo x, y
-    ctx.stroke()
+    else
+      bctx.clearAll()
+      @dragMount.setxy x, y
+      @drawMounts bctx
+      @draw bctx
+
+  onEnd: (ctx, bctx) ->
+    console.log 'zzz'
+    bctx.clearAll()
+    @draw ctx
 
   iconImg: 'line-icon.png'
 
@@ -418,7 +535,6 @@ rectSelectTool = new Tools
       @startSelectx = x
       @startSelecty = y
     else
-      console.log "yyy"
       @offx = x - @curx
       @offy = y - @cury
       console.log @offx, @offy, @curx, @cury
@@ -441,7 +557,7 @@ rectSelectTool = new Tools
       @endy = y
       bctx.clearAll()
       bctx.beginPath()
-      @setCtx bctx 
+      @setCtx bctx
 
       bctx.rect @startSelectx, @startSelecty, x - @startSelectx, y - @startSelecty
       bctx.stroke()
@@ -466,6 +582,14 @@ rectSelectTool = new Tools
       , @startSelecty
       , @selectWidth
       , @selectHeight
+
+      ctx.clearRect @startSelectx
+      , @startSelecty
+      , @selectWidth
+      , @selectHeight
+
+      bctx.putImageData @tempImg, @startSelectx, @startSelecty
+
       @selected = true
       [@curx, @cury] = [@startSelectx, @startSelecty]
       console.log @curx, @cury
@@ -473,16 +597,12 @@ rectSelectTool = new Tools
       @drag = false
 
   onEnd: (ctx, bctx) ->
+    return if not @selected
     bctx.clearAll()
     ctx.putImageData @tempImg, @curx, @cury
     @selected = false
 
   iconImg: 'rect-select-icon.svg'
-
-Math.random2DNormal = (c = 1) ->
-  r = Math.sqrt(-2.0 * Math.log( Math.random() ) )
-  theta = Math.random() * 2.0 * Math.PI
-  return [c * r * Math.cos(theta), c * r * Math.sin(theta)]
 
 sprayTool = new Tools
   controlVals: [
@@ -498,7 +618,7 @@ sprayTool = new Tools
 
     @timerId =  setInterval () ->
       for i in [0..30]
-        arr = Math.random2DNormal my.r / 2.0
+        arr = Math.random2DNormal my.r / 2.5
         dx = Math.round arr[0]
         dy = Math.round arr[1]
         ctx.setPixel my.curx + dx, my.cury + dy, color.toRgb()
