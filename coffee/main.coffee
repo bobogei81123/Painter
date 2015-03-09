@@ -1,4 +1,5 @@
 
+# Math 
 Math.random2DNormal = (c = 1) ->
   r = Math.sqrt(-2.0 * Math.log( Math.random() ) )
   theta = Math.random() * 2.0 * Math.PI
@@ -7,6 +8,7 @@ Math.random2DNormal = (c = 1) ->
 Math.euclidDistance = (x1, y1, x2, y2) ->
   Math.sqrt( (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) )
 
+#Main
 class Main
   constructor: () ->
     @mouseStatus = 0
@@ -20,6 +22,7 @@ class Main
     @width = @canvas.width()
     @height = @canvas.height()
     @BufDis = 50
+    @undoList = []
 
   mouseDown: () ->
     @mouseStatus = 1
@@ -49,7 +52,7 @@ class Main
 
       toolDiv.append(wrapDiv)
 
-    @ctx.fillStyle = 'rgba(255, 255, 255, 0)'
+    @ctx.fillStyle = 'rgba(255, 255, 255, 255)'
     @ctx.fillRect 0, 0, @canvas.width(), @canvas.height()
 
     CanvasRenderingContext2D.prototype.clearAll = () ->
@@ -132,9 +135,21 @@ class Main
 
     if x < 0 or x >= @width or y < 0 or y >= @height
       @mouseUp()
-
     return
 
+  undo: () ->
+    return if @undoList.length <= 0
+    img = @undoList.pop()
+    @ctx.putImageData img, 0, 0
+
+  restore: () ->
+    imgData = @ctx.getImageData 0, 0, @width, @height
+    console.log imgData
+    @undoList.push imgData
+    if @undoList.length > 10
+      @undoList.shift()
+
+# MountPoint
 class MountPoint
   constructor: (o) ->
     _.extend @, o
@@ -153,7 +168,7 @@ class MountPoint
   draw: (ctx) ->
     ctx.drawMountCircle @x, @y
 
-
+# Tools
 class Tools
   constructor: (o) ->
     _.extend @, o
@@ -192,6 +207,10 @@ class Tools
     @mountPoints.forEach (m) ->
       m.draw ctx
 
+  save: () ->
+    main.restore()
+
+# ColorInput
 class ColorInput
   constructor: (o) ->
     @defaultColor = '#000000'
@@ -228,6 +247,7 @@ class ColorInput
   val: () ->
     @spec.spectrum('get')
 
+#RangeInput
 class RangeInput
   constructor: (o) ->
     _.extend @, o
@@ -256,12 +276,14 @@ class RangeInput
   val: () ->
     @value
 
+# Pencil Tool
 pencilTool = new Tools
   controlVals: [
     new ColorInput( text: 'Draw color:' ),
     new RangeInput( text: 'Draw width:' ),
   ]
   onMouseDown: (x, y, ctx) ->
+    @save()
     color = @controlVals[0].val()
     ctx.beginPath()
     ctx.strokeStyle = color.toRgbString()
@@ -288,6 +310,7 @@ paintTool = new Tools
     new ColorInput( text: 'Fill color:' ),
   ]
   onMouseDown: (x, y, ctx) ->
+    @save()
     color = @controlVals[0].val().toRgb()
     colorVec = [color.r, color.g, color.b, color.a*255]
     rawData = ctx.getImageData(0, 0, ctx.width, ctx.height)
@@ -386,6 +409,7 @@ rectTool = new Tools
     bctx.stroke()
     
   onMouseUp: (x, y, ctx, bctx) ->
+    @save()
     ctx.beginPath()
     ctx.strokeStyle = @controlVals[0].val().toRgbString()
     ctx.fillStyle = @getVal(1).toRgbString()
@@ -435,6 +459,7 @@ circleTool = new Tools
 
   onMouseUp: (x, y, ctx, bctx) ->
     bctx.clearAll()
+    @save()
     ctx.beginPath()
     ctx.strokeStyle = @controlVals[0].val().toRgbString()
     ctx.fillStyle = @getVal(1).toRgbString()
@@ -518,6 +543,7 @@ lineTool = new Tools
   onEnd: (ctx, bctx) ->
     console.log 'zzz'
     bctx.clearAll()
+    @save()
     @draw ctx
 
   iconImg: 'line-icon.png'
@@ -583,6 +609,7 @@ rectSelectTool = new Tools
       , @selectWidth
       , @selectHeight
 
+      @save()
       ctx.clearRect @startSelectx
       , @startSelecty
       , @selectWidth
@@ -610,6 +637,7 @@ sprayTool = new Tools
     new RangeInput( text: "Range: " )
   ]
   onMouseDown: (x, y, ctx) ->
+    @save()
     color = @controlVals[0].val()
     @curx = x
     @cury = y
@@ -643,6 +671,29 @@ sprayTool = new Tools
 
   iconImg: 'spray-icon.png'
 
+undoTool = new Tools
+  controlVals: [
+  ]
+
+  onLoad: () ->
+    @onEnd()
+  
+  onEnd: () ->
+    main.undo()
+
+  onMouseDown: (x, y, ctx) ->
+    return
+      
+
+  onMouseMove: (x, y, ctx, bctx, status) ->
+    return
+
+  onMouseUp: (x, y, ctx, status) ->
+    return
+
+  iconImg: 'undo-icon.png'
+
+
 
 main = new Main()
 main.tools = [
@@ -653,7 +704,6 @@ main.tools = [
   lineTool,
   rectSelectTool,
   sprayTool,
+  undoTool,
 ]
 main.init()
-
-

@@ -1,5 +1,5 @@
 @import "compass/reset"
-@import "compass/css3/user-interface"
+@import "compass/css3"
 
 *
   +user-select(none)
@@ -9,26 +9,41 @@
   display: flex
   flex-flow: row
 
+$active-color: #808080
 
 #toolbox-wrapper 
   display: flex
-  flex-flow: row
-  flex-wrap: wrap
-  align-content: flex-start
+  flex-flow: column
+  +justify-content(flex-start)
   height: 100%
-  width: 200px
-  background-color: rgb(200, 255, 255)
-  padding: 12px
+  width: 80px
+  background-color: black
   box-sizing: border-box
 
   .tool-icon
+    padding-top: 20px
+    padding-bottom: 20px
+    width: 100%
+    height: 35px
+    +display-flex
+    +justify-content(center)
+    background-color: black
     &.active
-      background-color: rgb(220, 140, 20)
+      background-color: $active-color
+    &:hover 
+      background-color: $active-color
+      cursor: pointer
+
+    img
+      fill: white
+      stroke: white
+      width: 35px
+      height: 35px
 
 
 #right-wrapper 
   display: flex
-  width: calc(100% - 200px)
+  width: calc(100% - 80px)
   flex-flow: column
 
 
@@ -63,18 +78,7 @@
 #buf-canvas
 
 
-.tool-icon 
-  margin: 12px
-  padding: 6px
-  width: 35px
-  height: 35px
-  display: flex
-  background-color: rgb(160, 180, 240)
 
-
-.tool-icon:hover 
-  background-color: rgb(220, 140, 20)
-  cursor: pointer
 
 
 .option-text-span 
