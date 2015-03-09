@@ -80,6 +80,7 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
 
 /* line 14, ../sass/style.sass */
 #toolbox-wrapper {
+  z-index: 100;
   display: flex;
   flex-flow: column;
   -webkit-justify-content: flex-start;
@@ -89,7 +90,7 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
   background-color: black;
   box-sizing: border-box;
 }
-/* line 23, ../sass/style.sass */
+/* line 24, ../sass/style.sass */
 #toolbox-wrapper .tool-icon {
   padding-top: 20px;
   padding-bottom: 20px;
@@ -101,16 +102,16 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
   justify-content: center;
   background-color: black;
 }
-/* line 31, ../sass/style.sass */
+/* line 32, ../sass/style.sass */
 #toolbox-wrapper .tool-icon.active {
   background-color: #808080;
 }
-/* line 33, ../sass/style.sass */
+/* line 34, ../sass/style.sass */
 #toolbox-wrapper .tool-icon:hover {
   background-color: #808080;
   cursor: pointer;
 }
-/* line 37, ../sass/style.sass */
+/* line 38, ../sass/style.sass */
 #toolbox-wrapper .tool-icon img {
   fill: white;
   stroke: white;
@@ -118,14 +119,14 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
   height: 35px;
 }
 
-/* line 44, ../sass/style.sass */
+/* line 45, ../sass/style.sass */
 #right-wrapper {
   display: flex;
   width: calc(100% - 80px);
   flex-flow: column;
 }
 
-/* line 50, ../sass/style.sass */
+/* line 51, ../sass/style.sass */
 #top-wrapper {
   display: flex;
   flex-flow: row;
@@ -135,13 +136,13 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
   box-sizing: border-box;
 }
 
-/* line 59, ../sass/style.sass */
+/* line 60, ../sass/style.sass */
 #main-wrapper {
   background-color: #b4b4b4;
   height: calc(100% - 100px);
 }
 
-/* line 64, ../sass/style.sass */
+/* line 65, ../sass/style.sass */
 #canvas-wrapper {
   margin-top: 20px;
   margin-left: 20px;
@@ -152,37 +153,37 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
   position: relative;
 }
 
-/* line 74, ../sass/style.sass */
+/* line 75, ../sass/style.sass */
 #main-canvas {
   width: 100%;
   height: 100%;
 }
 
-/* line 84, ../sass/style.sass */
+/* line 85, ../sass/style.sass */
 .option-text-span {
   margin-right: 10px;
 }
 
-/* line 88, ../sass/style.sass */
+/* line 89, ../sass/style.sass */
 .option-wrapper {
   margin-left: 20px;
   display: flex;
   align-items: center;
 }
 
-/* line 94, ../sass/style.sass */
+/* line 95, ../sass/style.sass */
 input[type="range"] {
   -webkit-appearance: none;
   background-color: black;
   height: 2px;
 }
 
-/* line 100, ../sass/style.sass */
+/* line 101, ../sass/style.sass */
 #range2i {
   width: 25px;
 }
 
-/* line 103, ../sass/style.sass */
+/* line 104, ../sass/style.sass */
 #buf-canvas {
   width: 100%;
   height: 100%;
@@ -191,7 +192,7 @@ input[type="range"] {
   top: 0;
 }
 
-/* line 110, ../sass/style.sass */
+/* line 111, ../sass/style.sass */
 #detect-div {
   width: calc(100% + 100px);
   height: calc(100% + 100px);

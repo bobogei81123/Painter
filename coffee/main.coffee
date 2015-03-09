@@ -19,6 +19,7 @@ class Main
     @ctx = @canvas[0].getContext('2d')
     @bctx = @bcanvas[0].getContext('2d')
     @tools = []
+    @buttons = []
     @width = @canvas.width()
     @height = @canvas.height()
     @BufDis = 50
@@ -41,16 +42,34 @@ class Main
     can.height = @bctx.height = @bcanvas.height()
     #can.onselectstart = () -> false
 
+    #@ctx.globalCompositeOperation = 'destination-atop'
+    #@bctx.globalCompositeOperation = 'destination-atop'
     toolDiv = $('#toolbox-wrapper')
     @tools.forEach (tool, idx) ->
-      img = $('<img>').attr('src', 'img/' + tool.iconImg).addClass('tool-img')
-      wrapDiv = $('<div>')
-        .addClass('tool-icon')
-        .append(img)
-        .click ()->
-          main.changeCurrentTool idx
+      tool.render toolDiv, idx
 
-      toolDiv.append(wrapDiv)
+    #@tools.forEach (tool, idx) ->
+      #img = $('<img>').attr('src', 'img/' + tool.iconImg).addClass('tool-img')
+      #wrapDiv = $('<div>')
+        #.addClass('tool-icon')
+        #.append(img)
+        #.click ()->
+          #main.changeCurrentTool idx
+
+      #toolDiv.append(wrapDiv)
+
+    #@buttons.forEach (but, idx) ->
+      #img = $('<img>').attr('src', 'img/' + but.iconImg).addClass('tool-img')
+      #wrapDiv = $('<div>')
+        #.addClass('tool-icon')
+        #.append(img)
+        #.click ()->
+          #but.run()
+
+      #toolDiv.append(wrapDiv)
+
+    #@links.forEach but, idx ->
+
 
     @ctx.fillStyle = 'rgba(255, 255, 255, 255)'
     @ctx.fillRect 0, 0, @canvas.width(), @canvas.height()
@@ -81,7 +100,6 @@ class Main
         idt.data[1] = color.g
         idt.data[2] = color.b
         idt.data[3] = color.a * 255
-      console.log idt.data, color
       @putImageData idt, x, y
       return
 
@@ -114,10 +132,12 @@ class Main
       @tools[idx].onLoad()
 
   onMouseDown: (e) =>
-    console.log "mouse down"
+    x = e.offsetX - @BufDis
+    y = e.offsetY - @BufDis
+    return if x < 0 or x >= @width or y < 0 or y >= @height
     @mouseDown()
     if @currentTool != -1
-      @tools[@currentTool].onMouseDown(e.offsetX - @BufDis, e.offsetY - @BufDis, @ctx, @bctx)
+      @tools[@currentTool].onMouseDown(x, y, @ctx, @bctx)
       return
 
   onMouseUp: (e) =>
@@ -138,13 +158,14 @@ class Main
     return
 
   undo: () ->
+    if @currentTool != -1 and @tools[@currentTool].onEnd?
+      @tools[@currentTool].onEnd(@ctx, @bctx)
     return if @undoList.length <= 0
     img = @undoList.pop()
     @ctx.putImageData img, 0, 0
 
   restore: () ->
     imgData = @ctx.getImageData 0, 0, @width, @height
-    console.log imgData
     @undoList.push imgData
     if @undoList.length > 10
       @undoList.shift()
@@ -155,7 +176,6 @@ class MountPoint
     _.extend @, o
 
   dis: (x, y) ->
-    console.log x, y, @x, @y
     return Math.euclidDistance(x, y, @x, @y)
 
   setxy: (x, y, ctx) ->
@@ -167,6 +187,9 @@ class MountPoint
   
   draw: (ctx) ->
     ctx.drawMountCircle @x, @y
+
+  getxy: () ->
+    return [@x, @y]
 
 # Tools
 class Tools
@@ -197,7 +220,6 @@ class Tools
     bdis = 10
     for m in @mountPoints
       d = m.dis x, y
-      console.log d
       if d < bdis
         bdis = d
         cm = m
@@ -207,8 +229,70 @@ class Tools
     @mountPoints.forEach (m) ->
       m.draw ctx
 
+  render: (con, idx) ->
+    img = $('<img>').attr('src', 'img/' + @iconImg).addClass('tool-img')
+    wrapDiv = $('<div>')
+      .addClass('tool-icon')
+      .append(img)
+      .click ()->
+        main.changeCurrentTool idx
+
+    con.append(wrapDiv)
+
   save: () ->
+
     main.restore()
+
+#ShapeTools
+class ShapeTools extends Tools
+  onLoad: () ->
+    @hasShape = false
+    @mountPoints = [
+      new MountPoint(),
+      new MountPoint(),
+    ]
+
+  onMouseDown: (x, y, ctx, bctx) ->
+    if not @hasShape
+      @mount(0).setxy x, y
+      @mount(1).setxy x, y
+    else
+      m = @getClosetMount x, y
+      if m?
+        @dragMount = m
+      else
+        @onDrawEnd ctx, bctx
+        @hasShape = false
+        @onMouseDown x, y, ctx, bctx
+
+  onMouseMove: (x, y, ctx, bctx, st) ->
+    return if st == 0
+    if not @hasShape
+      @mount(1).setxy x, y
+    else if @dragMount?
+      @dragMount.setxy x, y
+    bctx.clearAll()
+    @draw bctx
+
+  onMouseUp: (x, y, ctx, bctx) ->
+    if not @hasShape
+      @mount(1).setxy x, y, bctx
+      @hasShape = true
+    bctx.clearAll()
+    @draw bctx
+    @drawMounts bctx
+
+  onDrawEnd: (ctx, bctx) ->
+    bctx.clearAll()
+    @save()
+    @draw ctx
+    @hasShape = false
+
+  onEnd: (ctx, bctx) ->
+    return if not @hasShape
+    @hasShape = false
+    @onDrawEnd ctx, bctx
+    
 
 # ColorInput
 class ColorInput
@@ -384,7 +468,7 @@ paintTool = new Tools
 
   iconImg: 'paint-icon.png'
 
-rectTool = new Tools
+rectTool = new ShapeTools
   controlVals: [
     new ColorInput( text: 'Border color:' )
     new ColorInput
@@ -392,36 +476,22 @@ rectTool = new Tools
       defaultColor: '#00000000'
     new RangeInput( text: 'Border width:' )
   ]
-  onMouseDown: (x, y, ctx) ->
-    @startx = x
-    @starty = y
-  onMouseMove: (x, y, ctx, bctx, st) ->
-    return if st == 0
-    @endx = x
-    @endy = y
-    bctx.clearRect 0, 0, bctx.width, bctx.height
-    bctx.beginPath()
-    bctx.strokeStyle = @getVal(0).toRgbString()
-    bctx.fillStyle = @getVal(1).toRgbString()
-    bctx.lineWidth = @getVal(2)
-    bctx.rect(@startx, @starty, @endx - @startx, @endy - @starty)
-    bctx.fill()
-    bctx.stroke()
-    
-  onMouseUp: (x, y, ctx, bctx) ->
-    @save()
+
+
+
+  draw: (ctx) ->
     ctx.beginPath()
-    ctx.strokeStyle = @controlVals[0].val().toRgbString()
+    ctx.strokeStyle = @getVal(0).toRgbString()
     ctx.fillStyle = @getVal(1).toRgbString()
     ctx.lineWidth = @getVal(2)
-    ctx.rect(@startx, @starty, @endx - @startx, @endy - @starty)
+    [sx, sy, ex, ey] = [@mount(0).x, @mount(0).y, @mount(1).x, @mount(1).y]
+    ctx.rect(sx, sy, ex-sx, ey-sy)
     ctx.fill()
     ctx.stroke()
-    bctx.clearRect 0, 0, bctx.width, bctx.height
-
+    
   iconImg: 'rect-icon.png'
 
-circleTool = new Tools
+circleTool = new ShapeTools
   controlVals: [
     new ColorInput( text: 'Border color:' )
     new ColorInput
@@ -438,113 +508,34 @@ circleTool = new Tools
     leny = (y2 - y1) / 2
     return [centx, centy, lenx, leny]
 
-  onMouseDown: (x, y, ctx) ->
-    @startx = x
-    @starty = y
 
-  onMouseMove: (x, y, ctx, bctx, st) ->
-    return if st == 0
-    @endx = x
-    @endy = y
-    bctx.clearAll()
-    bctx.clearRect 0, 0, bctx.width, bctx.height
-    bctx.beginPath()
-    bctx.strokeStyle = @controlVals[0].val().toRgbString()
-    bctx.fillStyle = @getVal(1).toRgbString()
-    bctx.lineWidth = parseInt(@getVal(2))
-    res = @drawEllipse(@startx, @starty, @endx, @endy, bctx)
-    bctx.ellipse(res[0], res[1], res[2], res[3] ,0, 0, 2*Math.PI)
-    bctx.fill()
-    bctx.stroke()
-
-  onMouseUp: (x, y, ctx, bctx) ->
-    bctx.clearAll()
-    @save()
+  draw: (ctx) ->
     ctx.beginPath()
     ctx.strokeStyle = @controlVals[0].val().toRgbString()
     ctx.fillStyle = @getVal(1).toRgbString()
     ctx.lineWidth = parseInt(@getVal(2))
-
-    res = @drawEllipse(@startx, @starty, @endx, @endy, ctx)
+    [sx, sy, ex, ey] = @mount(0).getxy().concat @mount(1).getxy()
+    res = @drawEllipse(sx, sy, ex, ey, ctx)
     ctx.ellipse(res[0], res[1], res[2], res[3] ,0, 0, 2*Math.PI)
-    
     ctx.fill()
-    ctx.stroke()
-    ctx.beginPath()
-
     ctx.stroke()
 
   iconImg: 'circle-icon.png'
 
-lineTool = new Tools
+lineTool = new ShapeTools
   controlVals: [
     new ColorInput( text: 'Border color:' )
     new RangeInput( text: 'Border width:' )
   ]
-
-  onLoad: () ->
-    @hasLine = false
-    @mountPoints = [new MountPoint()
-                    ,new MountPoint()]
-
-  onMouseDown: (x, y, ctx, bctx) ->
-    if not @hasLine
-      @getMount(0).setxy x, y
-      @getMount(1).setxy x, y
-    else
-      m = @getClosetMount(x, y)
-      if m?
-        @dragMount = m
-      else
-        @onEnd(ctx, bctx)
-        @hasLine = false
-        @onMouseDown x, y, ctx, bctx
 
   draw: (ctx) ->
     ctx.beginPath()
     ctx.strokeStyle = @getVal(0).toRgbString()
     ctx.lineWidth = parseInt(@getVal(1))
     pos = @getPos()
-    console.log pos
     ctx.moveTo pos[0].x, pos[0].y
     ctx.lineTo pos[1].x, pos[1].y
     ctx.stroke()
-
-
-  onMouseMove: (x, y, ctx, bctx, st) ->
-    return if st == 0
-    if not @hasLine
-      @mount(1).setxy x, y
-      bctx.clearAll()
-      @draw bctx
-    else
-      bctx.clearAll()
-      @dragMount.setxy x, y, bctx
-      @draw bctx
-
-
-  onMouseUp: (x, y, ctx, bctx) ->
-    if not @hasLine
-      @hasLine = true
-      @mount(1).setxy x, y
-      bctx.clearAll()
-      @draw bctx
-      
-      console.log @mountPoints
-      @mountPoints.forEach (m) ->
-        m.draw(bctx)
-
-    else
-      bctx.clearAll()
-      @dragMount.setxy x, y
-      @drawMounts bctx
-      @draw bctx
-
-  onEnd: (ctx, bctx) ->
-    console.log 'zzz'
-    bctx.clearAll()
-    @save()
-    @draw ctx
 
   iconImg: 'line-icon.png'
 
@@ -563,11 +554,9 @@ rectSelectTool = new Tools
     else
       @offx = x - @curx
       @offy = y - @cury
-      console.log @offx, @offy, @curx, @cury
 
       if @offx >= 0 and @offy >= 0 and @offx < @selectWidth and @offy < @selectHeight
         @drag = true
-        console.log "Drag = True"
 
   setCtx: (ctx) ->
     ctx.strokeStyle = "black"
@@ -619,12 +608,10 @@ rectSelectTool = new Tools
 
       @selected = true
       [@curx, @cury] = [@startSelectx, @startSelecty]
-      console.log @curx, @cury
     else if @drag
       @drag = false
 
   onEnd: (ctx, bctx) ->
-    return if not @selected
     bctx.clearAll()
     ctx.putImageData @tempImg, @curx, @cury
     @selected = false
@@ -675,25 +662,42 @@ undoTool = new Tools
   controlVals: [
   ]
 
-  onLoad: () ->
-    @onEnd()
-  
-  onEnd: () ->
+  run: () ->
     main.undo()
-
-  onMouseDown: (x, y, ctx) ->
-    return
-      
-
-  onMouseMove: (x, y, ctx, bctx, status) ->
-    return
-
-  onMouseUp: (x, y, ctx, status) ->
-    return
 
   iconImg: 'undo-icon.png'
 
+  render: (con, idx) ->
+    img = $('<img>').attr('src', 'img/' + @iconImg).addClass('tool-img')
+    my = @
+    wrapDiv = $('<div>')
+      .addClass('tool-icon')
+      .append(img)
+      .click ()->
+        my.run()
 
+    con.append(wrapDiv)
+
+downloadTool = new Tools
+  render: (con, idx) ->
+    img = $('<img>').attr('src', 'img/' + @iconImg).addClass('tool-img')
+    my = @
+    wrapDiv = $('<div>')
+      .addClass('tool-icon')
+      .append(img)
+
+    wrapA = $('<a>')
+      .append wrapDiv
+      .click ()->
+        my.run(@)
+
+    con.append(wrapA)
+
+  run: (link) ->
+    link.href = main.canvas[0].toDataURL()
+    link.download = 'myPaint.png'
+
+  iconImg: "download-icon.svg"
 
 main = new Main()
 main.tools = [
@@ -705,5 +709,6 @@ main.tools = [
   rectSelectTool,
   sprayTool,
   undoTool,
+  downloadTool,
 ]
 main.init()
