@@ -72,14 +72,23 @@ $active-color: #808080
   position: relative
 
 
-#main-canvas 
+.real-canvas 
   width: 100%
   height: 100%
 
-#buf-canvas
+.buffer-canvas
+  width: 100%
+  height: 100%
+  position: absolute
+  left: 0
+  top: 0
 
-
-
+.layer-div
+  width: 100%
+  height: 100%
+  position: absolute
+  left: 0
+  top: 0
 
 
 .option-text-span 
@@ -100,13 +109,6 @@ input[type="range"]
 
 #range2i 
   width: 25px
-
-#buf-canvas
-  width: 100%
-  height: 100%
-  position: absolute
-  left: 0
-  top: 0
 
 #detect-div
   width: calc(100% + 100px)

@@ -154,37 +154,13 @@ article, aside, details, figcaption, figure, footer, header, hgroup, main, menu,
 }
 
 /* line 75, ../sass/style.sass */
-#main-canvas {
+.real-canvas {
   width: 100%;
   height: 100%;
 }
 
-/* line 85, ../sass/style.sass */
-.option-text-span {
-  margin-right: 10px;
-}
-
-/* line 89, ../sass/style.sass */
-.option-wrapper {
-  margin-left: 20px;
-  display: flex;
-  align-items: center;
-}
-
-/* line 95, ../sass/style.sass */
-input[type="range"] {
-  -webkit-appearance: none;
-  background-color: black;
-  height: 2px;
-}
-
-/* line 101, ../sass/style.sass */
-#range2i {
-  width: 25px;
-}
-
-/* line 104, ../sass/style.sass */
-#buf-canvas {
+/* line 79, ../sass/style.sass */
+.buffer-canvas {
   width: 100%;
   height: 100%;
   position: absolute;
@@ -192,7 +168,40 @@ input[type="range"] {
   top: 0;
 }
 
-/* line 111, ../sass/style.sass */
+/* line 86, ../sass/style.sass */
+.layer-div {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* line 94, ../sass/style.sass */
+.option-text-span {
+  margin-right: 10px;
+}
+
+/* line 98, ../sass/style.sass */
+.option-wrapper {
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* line 104, ../sass/style.sass */
+input[type="range"] {
+  -webkit-appearance: none;
+  background-color: black;
+  height: 2px;
+}
+
+/* line 110, ../sass/style.sass */
+#range2i {
+  width: 25px;
+}
+
+/* line 113, ../sass/style.sass */
 #detect-div {
   width: calc(100% + 100px);
   height: calc(100% + 100px);

@@ -13,17 +13,15 @@ class Main
   constructor: () ->
     @mouseStatus = 0
     @currentTool = -1
-    @canvas = $('#main-canvas')
-    @bcanvas = $('#buf-canvas')
     @detectDiv = $('#detect-div')
-    @ctx = @canvas[0].getContext('2d')
-    @bctx = @bcanvas[0].getContext('2d')
     @tools = []
     @buttons = []
-    @width = @canvas.width()
-    @height = @canvas.height()
     @BufDis = 50
     @undoList = []
+    @layers = []
+    @activeLayer = 0
+    @width = 800
+    @height = 600
 
   mouseDown: () ->
     @mouseStatus = 1
@@ -32,47 +30,19 @@ class Main
     @mouseStatus = 0
 
   init: () ->
-    can = @canvas[0]
-    can.width = @ctx.width = @canvas.width()
-    can.height = @ctx.height = @canvas.height()
-    #can.onselectstart = () -> false
+    @layers = [new Layer()]
+    @layers[0].render()
 
-    can = @bcanvas[0]
-    can.width = @bctx.width = @bcanvas.width()
-    can.height = @bctx.height = @bcanvas.height()
-    #can.onselectstart = () -> false
-
+    
     #@ctx.globalCompositeOperation = 'destination-atop'
     #@bctx.globalCompositeOperation = 'destination-atop'
     toolDiv = $('#toolbox-wrapper')
     @tools.forEach (tool, idx) ->
       tool.render toolDiv, idx
 
-    #@tools.forEach (tool, idx) ->
-      #img = $('<img>').attr('src', 'img/' + tool.iconImg).addClass('tool-img')
-      #wrapDiv = $('<div>')
-        #.addClass('tool-icon')
-        #.append(img)
-        #.click ()->
-          #main.changeCurrentTool idx
 
-      #toolDiv.append(wrapDiv)
-
-    #@buttons.forEach (but, idx) ->
-      #img = $('<img>').attr('src', 'img/' + but.iconImg).addClass('tool-img')
-      #wrapDiv = $('<div>')
-        #.addClass('tool-icon')
-        #.append(img)
-        #.click ()->
-          #but.run()
-
-      #toolDiv.append(wrapDiv)
-
-    #@links.forEach but, idx ->
-
-
-    @ctx.fillStyle = 'rgba(255, 255, 255, 255)'
-    @ctx.fillRect 0, 0, @canvas.width(), @canvas.height()
+    #@ctx.fillStyle = 'rgba(255, 255, 255, 255)'
+    #@ctx.fillRect 0, 0, @canvas.width(), @canvas.height()
 
     CanvasRenderingContext2D.prototype.clearAll = () ->
       @clearRect 0, 0, @width, @height
@@ -115,10 +85,10 @@ class Main
 
     return if idx == @currentTool
 
-    @ctx.restore()
-    @bctx.restore()
-    @ctx.save()
-    @bctx.save()
+    #@ctx.restore()
+    #@bctx.restore()
+    #@ctx.save()
+    #@bctx.save()
 
     toolDiv = $('#toolbox-wrapper')
     toolDiv.children().removeClass 'active'
@@ -132,18 +102,19 @@ class Main
       @tools[idx].onLoad()
 
   onMouseDown: (e) =>
+    console.log 'zzz'
     x = e.offsetX - @BufDis
     y = e.offsetY - @BufDis
     return if x < 0 or x >= @width or y < 0 or y >= @height
     @mouseDown()
     if @currentTool != -1
-      @tools[@currentTool].onMouseDown(x, y, @ctx, @bctx)
+      @tools[@currentTool].onMouseDown(x, y, @layers[@activeLayer])
       return
 
   onMouseUp: (e) =>
     @mouseUp()
     if @currentTool != -1
-      @tools[@currentTool].onMouseUp(e.offsetX - @BufDis, e.offsetY - @BufDis, @ctx, @bctx)
+      @tools[@currentTool].onMouseUp(e.offsetX - @BufDis, e.offsetY - @BufDis, @layers[@activeLayer])
       return
     
       
@@ -151,7 +122,7 @@ class Main
     [x, y] = [e.offsetX - @BufDis, e.offsetY - @BufDis]
 
     if @currentTool != -1
-      @tools[@currentTool].onMouseMove(x, y, @ctx, @bctx, @mouseStatus)
+      @tools[@currentTool].onMouseMove(x, y, @layers[@activeLayer], @mouseStatus)
 
     if x < 0 or x >= @width or y < 0 or y >= @height
       @mouseUp()
@@ -165,11 +136,44 @@ class Main
     @ctx.putImageData img, 0, 0
 
   restore: () ->
-    imgData = @ctx.getImageData 0, 0, @width, @height
-    @undoList.push imgData
-    if @undoList.length > 10
-      @undoList.shift()
+    #imgData = @ctx.getImageData 0, 0, @width, @height
+    #@undoList.push imgData
+    #if @undoList.length > 10
+      #@undoList.shift()
 
+class Layer
+  constructor: () ->
+    return
+
+  render: () ->
+    @canvas = document.createElement 'canvas'
+    @canvas.width = 800
+    @canvas.height = 600
+    @canvas.className = 'main-canvas'
+
+    @bcanvas = document.createElement 'canvas'
+    @bcanvas.width = 800
+    @bcanvas.height = 600
+    @bcanvas.className = 'buffer-canvas'
+
+    layerDiv = document.createElement 'div'
+    layerDiv.className = 'layer-div'
+    layerDiv.appendChild @canvas
+    layerDiv.appendChild @bcanvas
+
+    dv = document.getElementById 'canvas-wrapper'
+    dv.insertBefore layerDiv, dv.firstChild
+
+    @ctx = @canvas.getContext '2d'
+    @bctx = @bcanvas.getContext '2d'
+
+    @ctx.fillStyle = 'rgba(255, 255, 255, 255)'
+    @ctx.fillRect 0, 0, @canvas.width, @canvas.height
+
+    @ctx.width = @bctx.width = 800
+    @ctx.height = @bctx.height = 600
+    
+      
 # MountPoint
 class MountPoint
   constructor: (o) ->
@@ -366,25 +370,28 @@ pencilTool = new Tools
     new ColorInput( text: 'Draw color:' ),
     new RangeInput( text: 'Draw width:' ),
   ]
-  onMouseDown: (x, y, ctx) ->
+  onMouseDown: (x, y, l) ->
+    console.log '???'
     @save()
     color = @controlVals[0].val()
-    ctx.beginPath()
-    ctx.strokeStyle = color.toRgbString()
-    ctx.lineJoin = ctx.lineCap = 'round'
-    ctx.lineWidth = @controlVals[1].val()
-    ctx.moveTo x, y
+    l.ctx.beginPath()
+    l.ctx.strokeStyle = color.toRgbString()
+    l.ctx.lineJoin = l.ctx.lineCap = 'round'
+    l.ctx.lineWidth = @controlVals[1].val()
+    l.ctx.moveTo x, y
 
-  onMouseMove: (x, y, ctx, bctx, status) ->
-    bctx.clearAll()
-    bctx.beginPath()
-    bctx.arc x, y, @getVal(1) / 2.0, 0, 2.0 * Math.PI
-    bctx.stroke()
+  onMouseMove: (x, y, l, status) ->
+    l.bctx.clearAll()
+    l.bctx.beginPath()
+    console.log l.bctx
+    window.a = l.bctx
+    l.bctx.arc x, y, @getVal(1) / 2.0, 0, 2.0 * Math.PI
+    l.bctx.stroke()
     return if status == 0
-    ctx.lineTo x, y
-    ctx.stroke()
+    l.ctx.lineTo x, y
+    l.ctx.stroke()
 
-  onMouseUp: (x, y, ctx, status) ->
+  onMouseUp: (x, y, l, status) ->
     return
 
   iconImg: 'pencil-icon.svg'
