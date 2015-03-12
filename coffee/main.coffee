@@ -19,7 +19,7 @@ class Main
     @BufDis = 50
     @undoList = []
     @layers = []
-    @activeLayer = 0
+    @activeLayerIdx = 0
     @width = 800
     @height = 600
 
@@ -31,7 +31,9 @@ class Main
 
   init: () ->
     @layers = [new Layer()]
-    @layers[0].render()
+    @layers[0].render(0, 0)
+    @layers[0].addActive()
+    @depthArr = [@layers[0]]
 
     
     #@ctx.globalCompositeOperation = 'destination-atop'
@@ -78,17 +80,22 @@ class Main
     @detectDiv.mousemove @onMouseMove
     @detectDiv.mouseup @onMouseUp
 
+    $('#layer-add-icon').click @addLayer
+    $('#layer-remove-icon').click @removeLayer
+    $('#layer-up-icon').click @upLayer
+    $('#layer-down-icon').click @downLayer
+
   changeCurrentTool: (idx) ->
 
     if @currentTool >= 0 and @tools[@currentTool].onEnd?
-      @tools[@currentTool].onEnd @ctx, @bctx
+      @tools[@currentTool].onEnd @activeLayer
 
     return if idx == @currentTool
 
-    #@ctx.restore()
-    #@bctx.restore()
-    #@ctx.save()
-    #@bctx.save()
+    @curLayer().ctx.restore()
+    @curLayer().bctx.restore()
+    @curLayer().ctx.save()
+    @curLayer().bctx.save()
 
     toolDiv = $('#toolbox-wrapper')
     toolDiv.children().removeClass 'active'
@@ -101,6 +108,44 @@ class Main
     if @tools[idx].onLoad?
       @tools[idx].onLoad()
 
+  changeCurrentLayer: (idx) =>
+    return if idx == @activeLayerIdx
+    @endCurrentTool()
+
+    @curLayer().removeActive()
+    @layers[idx].addActive()
+    @activeLayerIdx = idx
+
+  endCurrentTool: () ->
+    if @currentTool >= 0 and @tools[@currentTool].onEnd?
+      @tools[@currentTool].onEnd @curLayer()
+
+
+  addLayer: () =>
+    z = @layers.length
+    idx = @layers.length
+    nl = new Layer()
+    @layers.push nl
+    @depthArr.push nl
+    nl.render(idx, z)
+
+  removeLayer: () =>
+    return if @depthArr.length <= 1
+    cid = @curLayerZ()
+    @depthArr[cid].destruct()
+    for i in [cid..@depthArr.length-1]
+      @depthArr[i] = @depthArr[i+1]
+      @depthArr[i].setZ i
+    
+    @depthArr.pop()
+
+  downLayer: () =>
+    cid = @curLayerZ()
+    return if cid >= @depthArr.length - 1
+    Layer.swap depthArr[cid], depthArr[cid+1]
+
+
+
   onMouseDown: (e) =>
     console.log 'zzz'
     x = e.offsetX - @BufDis
@@ -108,13 +153,13 @@ class Main
     return if x < 0 or x >= @width or y < 0 or y >= @height
     @mouseDown()
     if @currentTool != -1
-      @tools[@currentTool].onMouseDown(x, y, @layers[@activeLayer])
+      @tools[@currentTool].onMouseDown(x, y, @layers[@activeLayerIdx])
       return
 
   onMouseUp: (e) =>
     @mouseUp()
     if @currentTool != -1
-      @tools[@currentTool].onMouseUp(e.offsetX - @BufDis, e.offsetY - @BufDis, @layers[@activeLayer])
+      @tools[@currentTool].onMouseUp(e.offsetX - @BufDis, e.offsetY - @BufDis, @layers[@activeLayerIdx])
       return
     
       
@@ -122,30 +167,50 @@ class Main
     [x, y] = [e.offsetX - @BufDis, e.offsetY - @BufDis]
 
     if @currentTool != -1
-      @tools[@currentTool].onMouseMove(x, y, @layers[@activeLayer], @mouseStatus)
+      @tools[@currentTool].onMouseMove(x, y, @layers[@activeLayerIdx], @mouseStatus)
 
     if x < 0 or x >= @width or y < 0 or y >= @height
       @mouseUp()
     return
 
+  curLayer: () ->
+    return @layers[@activeLayerIdx]
+
+  curLayerZ: () ->
+    return @curLayer().z
+
   undo: () ->
     if @currentTool != -1 and @tools[@currentTool].onEnd?
-      @tools[@currentTool].onEnd(@ctx, @bctx)
+      @tools[@currentTool].onEnd(@activeLayer)
     return if @undoList.length <= 0
-    img = @undoList.pop()
-    @ctx.putImageData img, 0, 0
+    un = @undoList.pop()
+    un.undo()
 
-  restore: () ->
-    #imgData = @ctx.getImageData 0, 0, @width, @height
-    #@undoList.push imgData
-    #if @undoList.length > 10
-      #@undoList.shift()
+  save: (l, img) ->
+    @undoList.push(new UndoOp layer: l, img: img)
+    if @undoList.length > 20
+      @undoList.shift()
 
 class Layer
+  @count: 0
   constructor: () ->
+    @id = Layer.count
+    Layer.count += 1
+    @name = 'Layer ' + @id
     return
 
-  render: () ->
+  render: (idx, z) ->
+    @renderCanvas()
+    @renderPannel idx
+    console.log z
+    @setZ z
+
+  setZ: (z) ->
+    @z = z
+    @canDiv.css 'zIndex', z
+    console.log z
+  
+  renderCanvas: () ->
     @canvas = document.createElement 'canvas'
     @canvas.width = 800
     @canvas.height = 600
@@ -163,16 +228,55 @@ class Layer
 
     dv = document.getElementById 'canvas-wrapper'
     dv.insertBefore layerDiv, dv.firstChild
+    @canDiv = $ layerDiv
+    console.log @canDiv
 
     @ctx = @canvas.getContext '2d'
     @bctx = @bcanvas.getContext '2d'
 
-    @ctx.fillStyle = 'rgba(255, 255, 255, 255)'
+    @ctx.fillStyle = 'rgba(255, 255, 255, 0)'
     @ctx.fillRect 0, 0, @canvas.width, @canvas.height
 
     @ctx.width = @bctx.width = 800
     @ctx.height = @bctx.height = 600
+
+  destruct: () ->
+    @canDiv.detach()
+    @layDiv.detach()
+
+  renderPannel: (idx)->
+    wrapper = $ '#layer-main'
+    imgDiv = $ '<canvas>'
+             .addClass 'layer-img'
+    wraDiv = $ '<div>'
+             .addClass 'layer-img-wrapper'
+             .append imgDiv
+    textP = $ '<p>'
+            .text @name
+    textDiv = $ '<div>'
+             .addClass 'layer-text'
+             .append textP
+    idiv = $ '<div>'
+             .addClass 'layer-item'
+             .append wraDiv, textDiv
+    wrapper.prepend idiv
+    @layDiv = idiv
+    @prevCan = @layDiv.find( 'canvas' )
+    console.log @prevCan.width()
+    @prevCan[0].width = @prevCan.width()
+    @prevCan[0].height = @prevCan.height()
+    console.log @prevCan[0]
+    @layDiv.click () ->
+      main.changeCurrentLayer idx
+
+  addActive: () ->
+    @layDiv.addClass 'active'
     
+  removeActive: () ->
+    @layDiv.removeClass 'active'
+  makePrev: () ->
+    console.log window.a = @prevCan[0]
+    @prevCan[0].getContext('2d').drawImage @canvas, 0, 0, @prevCan.width(), @prevCan.height()
       
 # MountPoint
 class MountPoint
@@ -243,9 +347,14 @@ class Tools
 
     con.append(wrapDiv)
 
-  save: () ->
+  save: (l) ->
+    console.log l
+    imgData = l.ctx.getImageData 0, 0, l.ctx.width, l.ctx.height
+    main.save l, imgData
 
-    main.restore()
+  onEnd: (l) ->
+    console.log l
+    l.makePrev()
 
 #ShapeTools
 class ShapeTools extends Tools
@@ -256,7 +365,7 @@ class ShapeTools extends Tools
       new MountPoint(),
     ]
 
-  onMouseDown: (x, y, ctx, bctx) ->
+  onMouseDown: (x, y, l) ->
     if not @hasShape
       @mount(0).setxy x, y
       @mount(1).setxy x, y
@@ -265,38 +374,45 @@ class ShapeTools extends Tools
       if m?
         @dragMount = m
       else
-        @onDrawEnd ctx, bctx
+        @onDrawEnd l
         @hasShape = false
-        @onMouseDown x, y, ctx, bctx
+        @onMouseDown x, y, l
 
-  onMouseMove: (x, y, ctx, bctx, st) ->
+  onMouseMove: (x, y, l, st) ->
     return if st == 0
     if not @hasShape
       @mount(1).setxy x, y
     else if @dragMount?
       @dragMount.setxy x, y
-    bctx.clearAll()
-    @draw bctx
+    l.bctx.clearAll()
+    @draw l.bctx
 
-  onMouseUp: (x, y, ctx, bctx) ->
+  onMouseUp: (x, y, l) ->
     if not @hasShape
-      @mount(1).setxy x, y, bctx
+      @mount(1).setxy x, y, l.bctx
       @hasShape = true
-    bctx.clearAll()
-    @draw bctx
-    @drawMounts bctx
+    l.bctx.clearAll()
+    @draw l.bctx
+    @drawMounts l.bctx
 
-  onDrawEnd: (ctx, bctx) ->
-    bctx.clearAll()
-    @save()
-    @draw ctx
+  onDrawEnd: (l) ->
+    console.log l
+    l.bctx.clearAll()
+    @save l
+    @draw l.ctx
     @hasShape = false
 
-  onEnd: (ctx, bctx) ->
+  onEnd: (l) ->
     return if not @hasShape
     @hasShape = false
-    @onDrawEnd ctx, bctx
+    @onDrawEnd l
     
+class UndoOp
+  constructor: (o) ->
+    _.extend @, o
+
+  undo: () ->
+    @layer.ctx.putImageData @img, 0, 0
 
 # ColorInput
 class ColorInput
@@ -365,14 +481,14 @@ class RangeInput
     @value
 
 # Pencil Tool
-pencilTool = new Tools
+class PencilTool extends Tools
   controlVals: [
     new ColorInput( text: 'Draw color:' ),
     new RangeInput( text: 'Draw width:' ),
   ]
   onMouseDown: (x, y, l) ->
     console.log '???'
-    @save()
+    @save l
     color = @controlVals[0].val()
     l.ctx.beginPath()
     l.ctx.strokeStyle = color.toRgbString()
@@ -383,8 +499,6 @@ pencilTool = new Tools
   onMouseMove: (x, y, l, status) ->
     l.bctx.clearAll()
     l.bctx.beginPath()
-    console.log l.bctx
-    window.a = l.bctx
     l.bctx.arc x, y, @getVal(1) / 2.0, 0, 2.0 * Math.PI
     l.bctx.stroke()
     return if status == 0
@@ -392,7 +506,14 @@ pencilTool = new Tools
     l.ctx.stroke()
 
   onMouseUp: (x, y, l, status) ->
+    @onEnd(l)
     return
+
+  onEnd: (l) ->
+    console.log 'zzz'
+    console.log l
+    super(l)
+    
 
   iconImg: 'pencil-icon.svg'
 
@@ -400,14 +521,14 @@ paintTool = new Tools
   controlVals: [
     new ColorInput( text: 'Fill color:' ),
   ]
-  onMouseDown: (x, y, ctx) ->
-    @save()
+  onMouseDown: (x, y, l) ->
+    @save l
     color = @controlVals[0].val().toRgb()
     colorVec = [color.r, color.g, color.b, color.a*255]
-    rawData = ctx.getImageData(0, 0, ctx.width, ctx.height)
+    width = l.ctx.width
+    height = l.ctx.height
+    rawData = l.ctx.getImageData(0, 0, width, height)
 
-    width = ctx.width
-    height = ctx.height
 
     getData = (x, y) ->
       o = (y*width + x)*4
@@ -464,13 +585,13 @@ paintTool = new Tools
           ++ qe
 
 
-    ctx.putImageData rawData, 0, 0
+    l.ctx.putImageData rawData, 0, 0
 
 
-  onMouseMove: (x, y, ctx, bctx, status) ->
+  onMouseMove: (x, y, l, status) ->
     return
 
-  onMouseUp: (x, y, ctx) ->
+  onMouseUp: (x, y, l) ->
     return
 
   iconImg: 'paint-icon.png'
@@ -554,7 +675,7 @@ rectSelectTool = new Tools
     @selected = false
     @drag = false
 
-  onMouseDown: (x, y, ctx) ->
+  onMouseDown: (x, y, l) ->
     if not @selected
       @startSelectx = x
       @startSelecty = y
@@ -571,28 +692,28 @@ rectSelectTool = new Tools
     ctx.setLineDash([5])
 
 
-  onMouseMove: (x, y, ctx, bctx, st) ->
+  onMouseMove: (x, y, l, st) ->
     return if st == 0
 
     if not @selected
       @endx = x
       @endy = y
-      bctx.clearAll()
-      bctx.beginPath()
-      @setCtx bctx
+      l.bctx.clearAll()
+      l.bctx.beginPath()
+      @setCtx l.bctx
 
-      bctx.rect @startSelectx, @startSelecty, x - @startSelectx, y - @startSelecty
-      bctx.stroke()
+      l.bctx.rect @startSelectx, @startSelecty, x - @startSelectx, y - @startSelecty
+      l.bctx.stroke()
     else if @drag
-      bctx.clearAll()
+      l.bctx.clearAll()
       [realx, realy] = [x - @offx, y - @offy]
-      bctx.putImageData @tempImg, realx, realy
-      bctx.beginPath()
-      bctx.rect realx, realy, @selectWidth, @selectHeight
-      bctx.stroke()
+      l.bctx.putImageData @tempImg, realx, realy
+      l.bctx.beginPath()
+      l.bctx.rect realx, realy, @selectWidth, @selectHeight
+      l.bctx.stroke()
       [@curx, @cury] = [realx, realy]
       
-  onMouseUp: (x, y, ctx, bctx) ->
+  onMouseUp: (x, y, l) ->
     
     if not @selected
       @endSelectx = x
@@ -600,27 +721,32 @@ rectSelectTool = new Tools
       @selectWidth = x - @startSelectx
       @selectHeight = y - @startSelecty
 
-      @tempImg = ctx.getImageData @startSelectx
+      @tempImg = l.ctx.getImageData @startSelectx
       , @startSelecty
       , @selectWidth
       , @selectHeight
 
-      @save()
-      ctx.clearRect @startSelectx
+      @save l
+      l.ctx.clearRect @startSelectx
       , @startSelecty
       , @selectWidth
       , @selectHeight
 
-      bctx.putImageData @tempImg, @startSelectx, @startSelecty
+      l.bctx.putImageData @tempImg, @startSelectx, @startSelecty
 
       @selected = true
       [@curx, @cury] = [@startSelectx, @startSelecty]
     else if @drag
       @drag = false
 
-  onEnd: (ctx, bctx) ->
-    bctx.clearAll()
-    ctx.putImageData @tempImg, @curx, @cury
+  onDrawEnd: (l) ->
+    tmp = document.createElement 'canvas'
+    tmp.width = @selectWidth
+    tmp.height = @selectHeight
+    tmpctx = tmp.getContext '2d'
+    tmpctx.putImageData @tempImg, 0, 0
+    l.bctx.clearAll()
+    l.ctx.drawImage tmp, @curx, @cury
     @selected = false
 
   iconImg: 'rect-select-icon.svg'
@@ -630,8 +756,8 @@ sprayTool = new Tools
     new ColorInput( text: "Spray Color: " )
     new RangeInput( text: "Range: " )
   ]
-  onMouseDown: (x, y, ctx) ->
-    @save()
+  onMouseDown: (x, y, l) ->
+    @save l
     color = @controlVals[0].val()
     @curx = x
     @cury = y
@@ -643,23 +769,23 @@ sprayTool = new Tools
         arr = Math.random2DNormal my.r / 2.5
         dx = Math.round arr[0]
         dy = Math.round arr[1]
-        ctx.setPixel my.curx + dx, my.cury + dy, color.toRgb()
+        l.ctx.setPixel my.curx + dx, my.cury + dy, color.toRgb()
       return
     ,
       100
       
 
-  onMouseMove: (x, y, ctx, bctx, status) ->
+  onMouseMove: (x, y, l, status) ->
     @r = parseInt @getVal 1
-    bctx.clearAll()
-    bctx.beginPath()
-    bctx.arc x, y, @r, 0, 2*Math.PI, false
-    bctx.stroke()
+    l.bctx.clearAll()
+    l.bctx.beginPath()
+    l.bctx.arc x, y, @r, 0, 2*Math.PI, false
+    l.bctx.stroke()
     if status == 1
       @curx = x
       @cury = y
 
-  onMouseUp: (x, y, ctx, status) ->
+  onMouseUp: (x, y, l, status) ->
     clearInterval @timerId
     return
 
@@ -708,7 +834,7 @@ downloadTool = new Tools
 
 main = new Main()
 main.tools = [
-  pencilTool,
+  new PencilTool,
   paintTool,
   rectTool,
   circleTool,
