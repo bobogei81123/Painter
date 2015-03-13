@@ -19,6 +19,6 @@ The website is at http://bobogei81123.github.io/Painter/
 Open index.html
 
 # Build
-coffee -bcw -o js coffee
+coffee -bcw -o js coffee  
 compass compile
 
